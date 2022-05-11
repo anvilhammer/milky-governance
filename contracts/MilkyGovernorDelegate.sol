@@ -10,10 +10,10 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
     string public constant name = "MilkySwap Governor V1";
 
     /// @notice The minimum setable proposal threshold
-    uint public constant MIN_PROPOSAL_THRESHOLD = 50000e18; // 50,000 Comp
+    uint public constant MIN_PROPOSAL_THRESHOLD = 50000e18; // 50,000 CREAMY
 
     /// @notice The maximum setable proposal threshold
-    uint public constant MAX_PROPOSAL_THRESHOLD = 100000e18; //100,000 Comp
+    uint public constant MAX_PROPOSAL_THRESHOLD = 100000e18; //100,000 CREAMY
 
     /// @notice The minimum setable voting period
     uint public constant MIN_VOTING_PERIOD = 5760; // About 24 hours
@@ -28,7 +28,7 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
     uint public constant MAX_VOTING_DELAY = 40320; // About 1 week
 
     /// @notice The number of votes in support of a proposal required in order for a quorum to be reached and for a vote to succeed
-    uint public constant quorumVotes = 400000e18; // 400,000 = 4% of Comp
+    uint public constant quorumVotes = 400000e18; // 400,000 = 4% of CREAMY
 
     /// @notice The maximum number of actions that can be included in a proposal
     uint public constant proposalMaxOperations = 10; // 10 actions
@@ -41,18 +41,21 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
 
     /**
       * @notice Used to initialize the contract during delegator contructor
-      * @param creamy_ The address of the COMP token
+      * @param timelock_ The address of the Timelock
+      * @param creamy_ The address of the CREAMY token
       * @param votingPeriod_ The initial voting period
       * @param votingDelay_ The initial voting delay
       * @param proposalThreshold_ The initial proposal threshold
       */
-    function initialize(address creamy_, uint votingPeriod_, uint votingDelay_, uint proposalThreshold_) public {
+    function initialize(address timelock_, address creamy_, uint votingPeriod_, uint votingDelay_, uint proposalThreshold_) public {
+        require(address(timelock) == address(0), "GovernorBravo::initialize: can only initialize once");
         require(msg.sender == admin, "MilkyGovernor::initialize: admin only");
         require(creamy_ != address(0), "MilkyGovernor::initialize: invalid creamy address");
         require(votingPeriod_ >= MIN_VOTING_PERIOD && votingPeriod_ <= MAX_VOTING_PERIOD, "MilkyGovernor::initialize: invalid voting period");
         require(votingDelay_ >= MIN_VOTING_DELAY && votingDelay_ <= MAX_VOTING_DELAY, "MilkyGovernor::initialize: invalid voting delay");
         require(proposalThreshold_ >= MIN_PROPOSAL_THRESHOLD && proposalThreshold_ <= MAX_PROPOSAL_THRESHOLD, "MilkyGovernor::initialize: invalid proposal threshold");
 
+        timelock = timelock_;
         creamy = CreamyInterface(creamy_);
         votingPeriod = votingPeriod_;
         votingDelay = votingDelay_;
@@ -61,20 +64,24 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
 
     /**
       * @notice Function used to propose a new proposal. Sender must have delegates above the proposal threshold
+      * @param targets Target addresses for proposal calls
+      * @param values Eth values for proposal calls
+      * @param signatures Function signatures for proposal calls
+      * @param calldatas Calldatas for proposal calls
       * @param description String description of the proposal
       * @return Proposal id of new proposal
       */
-    function propose(string memory description) public returns (uint) {
+    function propose(address[] memory targets, uint[] memory values, string[] memory signatures, bytes[] memory calldatas, string memory description) public returns (uint) {
         // Reject proposals before initiating as Governor
-        require(initialProposalId != 0, "GovernorBravo::propose: Governor Bravo not active");
+        require(initialProposalId != 0, "MilkyGovernor::propose: Governor Bravo not active");
         // Allow addresses above proposal threshold and whitelisted addresses to propose
-        require(creamy.balanceOfAt(msg.sender, sub256(block.number, 1)) > proposalThreshold || isWhitelisted(msg.sender), "GovernorBravo::propose: proposer votes below proposal threshold");
+        require(creamy.balanceOfAt(msg.sender, sub256(block.number, 1)) > proposalThreshold || isWhitelisted(msg.sender), "MilkyGovernor::propose: proposer votes below proposal threshold");
 
         uint latestProposalId = latestProposalIds[msg.sender];
         if (latestProposalId != 0) {
           ProposalState proposersLatestProposalState = state(latestProposalId);
-          require(proposersLatestProposalState != ProposalState.Active, "GovernorBravo::propose: one live proposal per proposer, found an already active proposal");
-          require(proposersLatestProposalState != ProposalState.Pending, "GovernorBravo::propose: one live proposal per proposer, found an already pending proposal");
+          require(proposersLatestProposalState != ProposalState.Active, "MilkyGovernor::propose: one live proposal per proposer, found an already active proposal");
+          require(proposersLatestProposalState != ProposalState.Pending, "MilkyGovernor::propose: one live proposal per proposer, found an already pending proposal");
         }
 
         uint startBlock = add256(block.number, votingDelay);
@@ -105,6 +112,32 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
         return newProposal.id;
     }
 
+    /**
+      * @notice Queues a proposal of state succeeded
+      * @param proposalId The id of the proposal to queue
+      */
+    function queue(uint proposalId) external {
+        // dev: unused
+        proposalId;
+    }
+
+    function queueOrRevertInternal(address target, uint value, string memory signature, bytes memory data, uint eta) internal {
+        // dev: unused
+        target;
+        value;
+        signature;
+        data;
+        eta;
+    }
+
+    /**
+      * @notice Executes a queued proposal if eta has passed
+      * @param proposalId The id of the proposal to execute
+      */
+    function execute(uint proposalId) external payable {
+        // dev: unused
+        proposalId;
+    }
 
     /**
       * @notice Cancels a proposal only if sender is the proposer, or proposer delegates dropped below proposal threshold
@@ -129,6 +162,16 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
         proposal.canceled = true;
 
         emit ProposalCanceled(proposalId);
+    }
+
+    /**
+      * @notice Gets actions of a proposal
+      * @param proposalId the id of the proposal
+      * @return Targets, values, signatures, and calldatas of the proposal actions
+      */
+    function getActions(uint proposalId) external view returns (address[] memory targets, uint[] memory values, string[] memory signatures, bytes[] memory calldatas) {
+        Proposal storage p = proposals[proposalId];
+        return (p.targets, p.values, p.signatures, p.calldatas);
     }
 
     /**
@@ -173,6 +216,28 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
       */
     function castVote(uint proposalId, uint8 support) external {
         emit VoteCast(msg.sender, proposalId, support, castVoteInternal(msg.sender, proposalId, support), "");
+    }
+
+    /**
+      * @notice Cast a vote for a proposal with a reason
+      * @param proposalId The id of the proposal to vote on
+      * @param support The support value for the vote. 0=against, 1=for, 2=abstain
+      * @param reason The reason given for the vote by the voter
+      */
+    function castVoteWithReason(uint proposalId, uint8 support, string calldata reason) external {
+        emit VoteCast(msg.sender, proposalId, support, castVoteInternal(msg.sender, proposalId, support), reason);
+    }
+
+    /**
+      * @notice Cast a vote for a proposal by signature
+      * @dev External function that accepts EIP-712 signatures for voting on proposals.
+      */
+    function castVoteBySig(uint proposalId, uint8 support, uint8 v, bytes32 r, bytes32 s) external {
+        proposalId;
+        support;
+        v;
+        r;
+        s;
     }
 
     /**
@@ -281,11 +346,13 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
     /**
       * @notice Initiate the MilkyGovernor contract
       * @dev Admin only. Sets initial proposal id which initiates the contract, ensuring a continuous proposal id count
+      * @param governorAlpha The address for the Governor to continue the proposal id count from
       */
-    function _initiate() external {
+    function _initiate(address governorAlpha) external {
         require(msg.sender == admin, "MilkyGovernor::_initiate: admin only");
         require(initialProposalId == 0, "MilkyGovernor::_initiate: can only initiate once");
-        initialProposalId = 0;
+        governorAlpha;
+        initialProposalId = 1;
     }
 
     /**
@@ -338,5 +405,11 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
     function sub256(uint256 a, uint256 b) internal pure returns (uint) {
         require(b <= a, "subtraction underflow");
         return a - b;
+    }
+
+    function getChainIdInternal() internal pure returns (uint) {
+        uint chainId;
+        assembly { chainId := chainid() }
+        return chainId;
     }
 }
