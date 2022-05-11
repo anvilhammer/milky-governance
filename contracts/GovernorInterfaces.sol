@@ -68,7 +68,7 @@ contract MilkyGovernorDelegatorStorage {
  * contract which implements GovernorBravoDelegateStorageV1 and following the naming convention
  * GovernorBravoDelegateStorageVX.
  */
-contract MilkyGovernorDelegatorStorageV1 is MilkyGovernorDelegatorStorage {
+contract MilkyGovernorDelegateStorageV1 is MilkyGovernorDelegatorStorage {
 
     /// @notice The delay before voting on a proposal may take place, once proposed, in blocks
     uint public votingDelay;
@@ -80,7 +80,7 @@ contract MilkyGovernorDelegatorStorageV1 is MilkyGovernorDelegatorStorage {
     uint public proposalThreshold;
 
     /// @notice Initial proposal id set at become
-    uint public initialProposalId = 1;
+    uint public initialProposalId;
 
     /// @notice The total number of proposals
     uint public proposalCount;
@@ -170,7 +170,7 @@ contract MilkyGovernorDelegatorStorageV1 is MilkyGovernorDelegatorStorage {
     }
 }
 
-contract MilkyGovernorDelegateStorageV2 is MilkyGovernorDelegatorStorageV1 {
+contract MilkyGovernorDelegateStorageV2 is MilkyGovernorDelegateStorageV1 {
     /// @notice Stores the expiration of account whitelist status as a timestamp
     mapping (address => uint) public whitelistAccountExpirations;
 
