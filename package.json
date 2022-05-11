@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "license": "MIT",
   "description": "Governance contracts for the MilkySwap protocol",
+  "scripts": {
+    "compile": "hardhat compile"
+  },
   "dependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.5",
     "@nomiclabs/hardhat-vyper": "^3.0.0",

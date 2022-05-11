@@ -7,7 +7,7 @@ import "./GovernorInterfaces.sol";
 contract MilkyGovernorDelegator is MilkyGovernorDelegatorStorage, MilkyGovernorEvents {
 	constructor(
 			address timelock_,
-			address comp_,
+			address creamy_,
 			address admin_,
 	        address implementation_,
 	        uint votingPeriod_,
@@ -19,7 +19,7 @@ contract MilkyGovernorDelegator is MilkyGovernorDelegatorStorage, MilkyGovernorE
 
         delegateTo(implementation_, abi.encodeWithSignature("initialize(address,address,uint256,uint256,uint256)",
             timelock_,
-            comp_,
+            creamy_,
             votingPeriod_,
             votingDelay_,
             proposalThreshold_));

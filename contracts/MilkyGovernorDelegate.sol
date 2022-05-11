@@ -16,16 +16,16 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
     uint public constant MAX_PROPOSAL_THRESHOLD = 100000e18; //100,000 CREAMY
 
     /// @notice The minimum setable voting period
-    uint public constant MIN_VOTING_PERIOD = 5760; // About 24 hours
+    uint public constant MIN_VOTING_PERIOD = 21600; // About 24 hours
 
     /// @notice The max setable voting period
-    uint public constant MAX_VOTING_PERIOD = 80640; // About 2 weeks
+    uint public constant MAX_VOTING_PERIOD = 302400; // About 2 weeks
 
     /// @notice The min setable voting delay
     uint public constant MIN_VOTING_DELAY = 1;
 
     /// @notice The max setable voting delay
-    uint public constant MAX_VOTING_DELAY = 40320; // About 1 week
+    uint public constant MAX_VOTING_DELAY = 151200; // About 1 week
 
     /// @notice The number of votes in support of a proposal required in order for a quorum to be reached and for a vote to succeed
     uint public constant quorumVotes = 400000e18; // 400,000 = 4% of CREAMY
@@ -55,7 +55,6 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
         require(votingDelay_ >= MIN_VOTING_DELAY && votingDelay_ <= MAX_VOTING_DELAY, "MilkyGovernor::initialize: invalid voting delay");
         require(proposalThreshold_ >= MIN_PROPOSAL_THRESHOLD && proposalThreshold_ <= MAX_PROPOSAL_THRESHOLD, "MilkyGovernor::initialize: invalid proposal threshold");
 
-        timelock = timelock_;
         creamy = CreamyInterface(creamy_);
         votingPeriod = votingPeriod_;
         votingDelay = votingDelay_;
