@@ -35,8 +35,8 @@ contract MilkyGovernorDelegator is MilkyGovernorDelegatorStorage, MilkyGovernorE
      * @param implementation_ The address of the new implementation for delegation
      */
     function _setImplementation(address implementation_) public {
-        require(msg.sender == admin, "GovernorBravoDelegator::_setImplementation: admin only");
-        require(implementation_ != address(0), "GovernorBravoDelegator::_setImplementation: invalid implementation address");
+        require(msg.sender == admin, "MilkyGovernorDelegator::_setImplementation: admin only");
+        require(implementation_ != address(0), "Milk yGovernorDelegator::_setImplementation: invalid implementation address");
 
         address oldImplementation = implementation;
         implementation = implementation_;

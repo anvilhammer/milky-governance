@@ -6,6 +6,9 @@ import {
   MilkyGovernorDelegate__factory,
   MilkyGovernorDelegate,
   MilkyGovernorDelegator__factory,
+  MilkyGovernorDelegator,
+  MockGovernorUpgrade__factory,
+  Timelock__factory,
   CreamyToken__factory,
   CreamyToken,
   ERC20Mock__factory,
@@ -24,13 +27,17 @@ const VOTING_PERIOD = ethers.BigNumber.from(20) // should be 1 week in productio
 const VOTING_DELAY = ethers.BigNumber.from(1)
 const PROPOSAL_THRESHOLD = TEN_18.mul(500000)
 
+const NEW_VOTING_PERIOD = ethers.BigNumber.from(151200) // should be 1 week in production: 151200
+const NEW_VOTING_DELAY = ethers.BigNumber.from(151200)
+const NEW_PROPOSAL_THRESHOLD = TEN_18.mul(1000000)
+
 describe('MilkyGovernor State', () => {
   let deployer: SignerWithAddress,
       alice: SignerWithAddress,
       bob: SignerWithAddress,
       carol: SignerWithAddress
 
-  let milky: ERC20Mock, creamy: CreamyToken, gov: MilkyGovernorDelegate, govDelegate
+  let milky: ERC20Mock, creamy: CreamyToken, gov: MilkyGovernorDelegate, govDelegator: MilkyGovernorDelegator, govDelegate
 
   beforeEach(async () => {
     [deployer, alice, bob, carol] = await ethers.getSigners()
@@ -47,8 +54,8 @@ describe('MilkyGovernor State', () => {
     govDelegate = await GovDelegate.deploy()
     await govDelegate.deployed()
 
-    const GovInstance = new MilkyGovernorDelegator__factory(deployer)
-    const govInstance = await GovInstance.deploy(
+    const GovDelegator = new MilkyGovernorDelegator__factory(deployer)
+    govDelegator = await GovDelegator.deploy(
       ZERO_ADDRESS,
       creamy.address,
       deployer.address,
@@ -57,9 +64,9 @@ describe('MilkyGovernor State', () => {
       VOTING_DELAY,
       PROPOSAL_THRESHOLD,
     )
-    await govInstance.deployed()
+    await govDelegator.deployed()
 
-    gov = govDelegate.attach(govInstance.address) as MilkyGovernorDelegate
+    gov = govDelegate.attach(govDelegator.address) as MilkyGovernorDelegate
     await gov._initiate(ZERO_ADDRESS)
   })
 
@@ -338,19 +345,37 @@ describe('MilkyGovernor State', () => {
   })
 
   describe('upgrade', () => {
-    it('asdf')
-    /**
-     * lets you update 
-     * MIN_PROPOSAL_THRESHOLD
-     * MAX_PROPOSAL_THRESHOLD
-     * MIN_VOTING_PERIOD
-     * MAX_VOTING_PERIOD
-     * MIN_VOTING_DELAY
-     * MAX_VOTING_DELAY
-     * quorumVotes
-     * proposalMaxOperations
-     * 
-     * Does anything stay the same?
-     */
+    beforeEach(async () => {
+      const Timelock = new Timelock__factory(deployer)
+      const timelock = await Timelock.deploy(deployer.address, 259200) // 3 days
+
+      const NewGovDelegate = new MockGovernorUpgrade__factory(deployer)
+      const newGovDelegate = await NewGovDelegate.deploy()
+
+      await govDelegator._setImplementation(newGovDelegate.address)
+      
+      gov = newGovDelegate.attach(govDelegator.address) as MilkyGovernorDelegate
+      
+      await gov.initialize(
+        timelock.address,
+        creamy.address,
+        NEW_VOTING_PERIOD,
+        NEW_VOTING_DELAY,
+        NEW_PROPOSAL_THRESHOLD,
+      )
+    })
+
+    it('sets all variables', async () => {
+      expect(await gov.MIN_VOTING_DELAY()).eq(21600)
+      expect(await gov.MAX_VOTING_DELAY()).eq(216000)
+      expect(await gov.MIN_VOTING_PERIOD()).eq(21600)
+      expect(await gov.MAX_VOTING_PERIOD()).eq(282240)
+      expect(await gov.MIN_PROPOSAL_THRESHOLD()).eq(TEN_18.mul(600000))
+      expect(await gov.MAX_PROPOSAL_THRESHOLD()).eq(TEN_18.mul(2000000))
+      expect(await gov.votingDelay()).eq(NEW_VOTING_DELAY)
+      expect(await gov.votingPeriod()).eq(NEW_VOTING_PERIOD)
+      expect(await gov.proposalThreshold()).eq(NEW_PROPOSAL_THRESHOLD)
+      expect(await gov.quorumVotes()).eq(TEN_18.mul(500000))
+    })
   })
 })
