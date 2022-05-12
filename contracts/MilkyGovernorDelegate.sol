@@ -140,7 +140,7 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
       * @param proposalId The id of the proposal to execute
       */
     function execute(uint proposalId) external payable {
-        require(state(proposalId) == ProposalState.Queued, "MilkyGovernor::execute: proposal can only be executed if it is queued");
+        require(state(proposalId) == ProposalState.Succeeded, "MilkyGovernor::execute: proposal can only be executed if has succeeded");
 
         Proposal storage proposal = proposals[proposalId];
         proposal.executed = true;
@@ -201,12 +201,10 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
             return ProposalState.Active;
         } else if (proposal.forVotes <= proposal.againstVotes || proposal.forVotes < quorumVotes) {
             return ProposalState.Defeated;
-        } else if (proposal.eta == 0) {
-            return ProposalState.Succeeded;
         } else if (proposal.executed) {
             return ProposalState.Executed;
         } else {
-            return ProposalState.Queued;
+            return ProposalState.Succeeded;
         }
     }
 

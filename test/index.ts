@@ -142,11 +142,38 @@ describe('MilkyGovernor State', () => {
       expect(proposal.canceled).eq(false)
     })
 
-    it('does not let an account make another proposal when active')
+    it('does not let an account make another proposal when pending', async () => {
+      await gov.connect(deployer).propose([], [], [], [], 'Test proposal')
+      
+      await expect(
+        gov.connect(deployer).propose([], [], [], [], 'Test Proposal 2')
+      ).revertedWith('MilkyGovernor::propose: one live proposal per proposer, found an already pending proposal')
+    })
 
-    it('does not let an account make another proposal when pending')
+    it('does not let an account make another proposal when active', async () => {
+      const proposalId = (await gov.proposalCount()).add(1)
+      await gov.connect(deployer).propose([], [], [], [], 'Test proposal')
+      const proposal = await gov.proposals(proposalId)
+      await mineToBlock(proposal.startBlock)
+      
+      await expect(
+        gov.connect(deployer).propose([], [], [], [], 'Test Proposal 2')
+      ).revertedWith('MilkyGovernor::propose: one live proposal per proposer, found an already active proposal')
+    })
 
-    it('allows multiple proposals at once')
+    it('allows multiple proposals at once', async () => {
+      await giveCreamy(milky, creamy, deployer, alice, TEN_18.mul(1_000_000))
+
+      const proposalId1 = (await gov.proposalCount()).add(1)
+      await gov.connect(deployer).propose([], [], [], [], 'Test proposal')
+      const proposalId2 = (await gov.proposalCount()).add(1)
+      await gov.connect(alice).propose([], [], [], [], 'Test proposal')
+
+      const proposal1 = await gov.proposals(proposalId1)
+      const proposal2 = await gov.proposals(proposalId2)
+      expect(proposal1.proposer).eq(deployer.address)
+      expect(proposal2.proposer).eq(alice.address)
+    })
   })
 
   describe('cancel', () => {
@@ -172,6 +199,7 @@ describe('MilkyGovernor State', () => {
 
   describe('castVote', () => {
     let proposalId: BigNumberish
+    let proposal: any
     const CREAMY_TRANSFER = TEN_18.mul(1_000_000)
     const ROUGH_CREAMY_BALANCE = TEN_18.mul(990_000) // hard to get exact balances with CREAMY
 
@@ -187,7 +215,8 @@ describe('MilkyGovernor State', () => {
       await gov.connect(deployer).propose([], [], [], [], 'Test proposal')
 
       // only need to mine once if VOTING_DELAY is one block
-      await network.provider.request({ method: "evm_mine", params: [] })
+      proposal = await gov.proposals(proposalId)
+      await mineToBlock(proposal.startBlock)
     })
 
     it('reverts on incorrect vote', async () => {
@@ -228,34 +257,84 @@ describe('MilkyGovernor State', () => {
         gov.connect(alice).castVote(proposalId, Support.AGAINST)
       ).to.revertedWith('MilkyGovernor::castVoteInternal: voter already voted')
     })
+
+    it('does not allow users to vote if it has closed', async () => {
+      await mineToBlock(proposal.endBlock)
+      await expect(
+        gov.connect(alice).castVote(proposalId, Support.FOR)
+      ).to.revertedWith('MilkyGovernor::castVoteInternal: voting is closed')
+    })
   })
 
   describe('state', () => {
-    it('defeats if more are against', async () => {
-      // await mineToBlock(proposal.endBlock)
+    let proposalId: BigNumberish
+    let proposal: any
+    const BELOW_QUORUM = TEN_18.mul(300_000)
+    const ABOVE_QUORUM = TEN_18.mul(1_000_000)
 
-      // expect(await gov.state(proposalId)).eq(ProposalState.DEFEATED)
+    beforeEach(async () => {
+      proposalId = (await gov.proposalCount()).add(1)
+
+      await giveCreamy(milky, creamy, deployer, alice, BELOW_QUORUM)
+      await giveCreamy(milky, creamy, deployer, bob, ABOVE_QUORUM)
+      // await giveCreamy(milky, creamy, deployer, carol, CREAMY_TRANSFER)
+
+      await gov._setWhitelistGuardian(deployer.address)
+      await gov._setWhitelistAccountExpiration(deployer.address, 9999999999999)
+      await gov.connect(deployer).propose([], [], [], [], 'Test proposal')
+      
+      proposal = await gov.proposals(proposalId)
     })
 
-    it('defeats if quorum is not reached', async () => {
-      // await mineToBlock(proposal.endBlock)
+    it('pends', async () => {
+      expect(await gov.state(proposalId)).eq(ProposalState.PENDING)
+    })
 
-      // expect(await gov.state(proposalId)).eq(ProposalState.DEFEATED)
+    it('activates', async () => {
+      await mineToBlock(proposal.startBlock)
+      expect(await gov.state(proposalId)).eq(ProposalState.ACTIVE)
+    })
+
+    it('cancels', async () => {
+      await gov.connect(deployer).cancel(proposalId)
+      expect(await gov.state(proposalId)).eq(ProposalState.CANCELED)
+    })
+
+    it('defeats when against', async () => {
+      await mineToBlock(proposal.startBlock)
+      await gov.connect(bob).castVote(proposalId, Support.AGAINST)
+      await mineToBlock(proposal.endBlock)
+
+      expect(await gov.state(proposalId)).eq(ProposalState.DEFEATED)
+    })
+
+    it('defeats when quorum is not reached', async () => {
+      await mineToBlock(proposal.startBlock)
+      await gov.connect(alice).castVote(proposalId, Support.FOR)
+      await mineToBlock(proposal.endBlock)
+
+      expect(await gov.state(proposalId)).eq(ProposalState.DEFEATED)
     })
 
     it('succeeds', async () => {
-      // await gov.connect(alice).castVote(proposalId, Support.FOR)
+      await mineToBlock(proposal.startBlock)
+      await gov.connect(bob).castVote(proposalId, Support.FOR)
+      await mineToBlock(proposal.endBlock)
 
-      // const proposal = await gov.proposals(proposalId)
-      // await mineToBlock(proposal.endBlock)
-      
-      // expect(await gov.state(proposalId)).eq(ProposalState.SUCCEEDED)
+      expect(await gov.state(proposalId)).eq(ProposalState.SUCCEEDED)
     })
-  })
 
-  describe('execute', () => {
-    // check every possible proposal state
-    it('sets executed to true, emits ProposalExecuted event')
+    it('executes', async () => {
+      await mineToBlock(proposal.startBlock)
+      await gov.connect(bob).castVote(proposalId, Support.FOR)
+      await mineToBlock(proposal.endBlock)
+      await gov.execute(proposalId)
+
+      expect(await gov.state(proposalId)).eq(ProposalState.EXECUTED)
+
+      const newProposalState = await gov.proposals(proposalId)
+      expect(newProposalState.executed).eq(true)
+    })
   })
 
   describe('upgrade', () => {
