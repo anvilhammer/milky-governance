@@ -16,7 +16,7 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
     uint public constant MAX_PROPOSAL_THRESHOLD = 1000000e18; // 1,000,000 CREAMY
 
     /// @notice The minimum setable voting period
-    uint public constant MIN_VOTING_PERIOD = 1; // 21600 is About 24 hours. Set to 1 for testing
+    uint public constant MIN_VOTING_PERIOD = 21600; // About 24 hours. Set to 1 for testing
 
     /// @notice The max setable voting period
     uint public constant MAX_VOTING_PERIOD = 302400; // About 2 weeks
