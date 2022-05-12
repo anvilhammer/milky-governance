@@ -37,7 +37,11 @@ describe('MilkyGovernor State', () => {
       bob: SignerWithAddress,
       carol: SignerWithAddress
 
-  let milky: ERC20Mock, creamy: CreamyToken, gov: MilkyGovernorDelegate, govDelegator: MilkyGovernorDelegator, govDelegate
+  let milky: ERC20Mock,
+      creamy: CreamyToken,
+      gov: MilkyGovernorDelegate,
+      govDelegator: MilkyGovernorDelegator,
+      govDelegate
 
   beforeEach(async () => {
     [deployer, alice, bob, carol] = await ethers.getSigners()
@@ -346,6 +350,12 @@ describe('MilkyGovernor State', () => {
 
   describe('upgrade', () => {
     beforeEach(async () => {
+      // create a mock proposal to test proposal count continuation
+      await gov._setWhitelistGuardian(deployer.address)
+      await gov._setWhitelistAccountExpiration(deployer.address, 9999999999999)
+      await gov.connect(deployer).propose([], [], [], [], 'Test proposal')
+
+      // deploy the new delegate
       const Timelock = new Timelock__factory(deployer)
       const timelock = await Timelock.deploy(deployer.address, 259200) // 3 days
 
@@ -376,6 +386,10 @@ describe('MilkyGovernor State', () => {
       expect(await gov.votingPeriod()).eq(NEW_VOTING_PERIOD)
       expect(await gov.proposalThreshold()).eq(NEW_PROPOSAL_THRESHOLD)
       expect(await gov.quorumVotes()).eq(TEN_18.mul(500000))
+    })
+
+    it('continues the proposalCount', async () => {
+      expect(await gov.proposalCount()).eq(2)
     })
   })
 })
