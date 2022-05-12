@@ -10,10 +10,10 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
     string public constant name = "MilkySwap Governor V1";
 
     /// @notice The minimum setable proposal threshold
-    uint public constant MIN_PROPOSAL_THRESHOLD = 50000e18; // 50,000 CREAMY
+    uint public constant MIN_PROPOSAL_THRESHOLD = 500000e18; // 500,000 CREAMY
 
     /// @notice The maximum setable proposal threshold
-    uint public constant MAX_PROPOSAL_THRESHOLD = 100000e18; //100,000 CREAMY
+    uint public constant MAX_PROPOSAL_THRESHOLD = 1000000e18; // 1,000,000 CREAMY
 
     /// @notice The minimum setable voting period
     uint public constant MIN_VOTING_PERIOD = 21600; // About 24 hours
@@ -116,8 +116,14 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
       * @param proposalId The id of the proposal to queue
       */
     function queue(uint proposalId) external {
-        // dev: unused
-        proposalId;
+        require(state(proposalId) == ProposalState.Succeeded, "GovernorBravo::queue: proposal can only be queued if it is succeeded");
+        Proposal storage proposal = proposals[proposalId];
+        uint eta = 0;
+        for (uint i = 0; i < proposal.targets.length; i++) {
+            queueOrRevertInternal(proposal.targets[i], proposal.values[i], proposal.signatures[i], proposal.calldatas[i], eta);
+        }
+        proposal.eta = eta;
+        emit ProposalQueued(proposalId, eta);
     }
 
     function queueOrRevertInternal(address target, uint value, string memory signature, bytes memory data, uint eta) internal {
@@ -134,8 +140,11 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
       * @param proposalId The id of the proposal to execute
       */
     function execute(uint proposalId) external payable {
-        // dev: unused
-        proposalId;
+        require(state(proposalId) == ProposalState.Queued, "MilkyGovernor::execute: proposal can only be executed if it is queued");
+
+        Proposal storage proposal = proposals[proposalId];
+        proposal.executed = true;
+        emit ProposalExecuted(proposalId);
     }
 
     /**
@@ -147,16 +156,9 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
 
         Proposal storage proposal = proposals[proposalId];
 
-        // Proposer can cancel
-        if(msg.sender != proposal.proposer) {
-            // Whitelisted proposers can't be canceled for falling below proposal threshold
-            if(isWhitelisted(proposal.proposer)) {
-                require((creamy.balanceOfAt(proposal.proposer, sub256(block.number, 1)) < proposalThreshold) && msg.sender == whitelistGuardian, "MilkyGovernor::cancel: whitelisted proposer");
-            }
-            else {
-                require((creamy.balanceOfAt(proposal.proposer, sub256(block.number, 1)) < proposalThreshold), "MilkyGovernor::cancel: proposer above threshold");
-            }
-        }
+        // Proposer can cancel and whitlist guardian can cancel
+        // the Compound dynamics do not apply here because CREAMY is non-transferrable
+        require(msg.sender == proposal.proposer || msg.sender == whitelistGuardian);
         
         proposal.canceled = true;
 
@@ -351,6 +353,7 @@ contract MilkyGovernorDelegate is MilkyGovernorDelegateStorageV2, MilkyGovernorE
         require(msg.sender == admin, "MilkyGovernor::_initiate: admin only");
         require(initialProposalId == 0, "MilkyGovernor::_initiate: can only initiate once");
         governorAlpha;
+        proposalCount = 1;
         initialProposalId = 1;
     }
 
