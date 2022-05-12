@@ -1,4 +1,4 @@
-import { ethers } from 'hardhat'
+import { ethers, network } from 'hardhat'
 import { BigNumber, BigNumberish } from 'ethers'
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import {
@@ -29,4 +29,29 @@ export async function giveCreamy(
   await milky.connect(funder).transfer(to.address, amount)
   await milky.connect(to).approve(creamy.address, amount)
   await creamy.connect(to).create_lock(amount, lockEnd, { gasLimit: 30000000 })
+}
+
+export async function mineToBlock(blockNumber: BigNumber) {
+  const blockNumBefore = await ethers.provider.getBlockNumber();
+  const blocksToMine = blockNumber.sub(blockNumBefore).toNumber()
+  for (let i = 0; i <= blocksToMine; i++) {
+    await network.provider.request({ method: "evm_mine", params: [] });
+  }
+}
+
+export enum Support {
+  AGAINST,
+  FOR,
+  ABSTAIN,
+}
+
+export enum ProposalState {
+  PENDING,
+  ACTIVE,
+  CANCELED,
+  DEFEATED,
+  SUCCEEDED,
+  QUEUED,
+  EXPIRED,
+  EXECUTED
 }

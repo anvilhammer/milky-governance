@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { ethers } from 'hardhat';
+import { ethers, network } from 'hardhat';
 import { BigNumberish } from 'ethers'
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import {
@@ -14,10 +14,13 @@ import {
 import {
   TEN_18,
   ZERO_ADDRESS,
-  giveCreamy
+  giveCreamy,
+  mineToBlock,
+  Support,
+  ProposalState
 } from './utils'
 
-const VOTING_PERIOD = ethers.BigNumber.from(151200)
+const VOTING_PERIOD = ethers.BigNumber.from(20) // should be 1 week in production: 151200
 const VOTING_DELAY = ethers.BigNumber.from(1)
 const PROPOSAL_THRESHOLD = TEN_18.mul(500000)
 
@@ -101,8 +104,9 @@ describe('MilkyGovernor State', () => {
     it('allows a whitelisted account to propose', async () => {
       const proposalId = (await gov.proposalCount()).add(1)
       await gov.connect(deployer).propose([], [], [], [], 'Test proposal')
-      const proposal = await gov.proposals(proposalId)
       expect(await gov.proposalCount()).eq(proposalId)
+
+      const proposal = await gov.proposals(proposalId)
       expect(proposal.id).eq(proposalId)
       expect(proposal.proposer).eq(deployer.address)
       expect(proposal.eta).eq(0)
@@ -138,7 +142,11 @@ describe('MilkyGovernor State', () => {
       expect(proposal.canceled).eq(false)
     })
 
-    it('multiple proposals at once')
+    it('does not let an account make another proposal when active')
+
+    it('does not let an account make another proposal when pending')
+
+    it('allows multiple proposals at once')
   })
 
   describe('cancel', () => {
@@ -163,17 +171,85 @@ describe('MilkyGovernor State', () => {
   })
 
   describe('castVote', () => {
-    let proposalId
+    let proposalId: BigNumberish
+    const CREAMY_TRANSFER = TEN_18.mul(1_000_000)
+    const ROUGH_CREAMY_BALANCE = TEN_18.mul(990_000) // hard to get exact balances with CREAMY
 
     beforeEach(async () => {
       proposalId = (await gov.proposalCount()).add(1)
+
+      await giveCreamy(milky, creamy, deployer, alice, CREAMY_TRANSFER)
+      await giveCreamy(milky, creamy, deployer, bob, CREAMY_TRANSFER)
+      await giveCreamy(milky, creamy, deployer, carol, CREAMY_TRANSFER)
+
       await gov._setWhitelistGuardian(deployer.address)
       await gov._setWhitelistAccountExpiration(deployer.address, 9999999999999)
       await gov.connect(deployer).propose([], [], [], [], 'Test proposal')
+
+      // only need to mine once if VOTING_DELAY is one block
+      await network.provider.request({ method: "evm_mine", params: [] })
     })
 
-    it('asdf', async () => {
+    it('reverts on incorrect vote', async () => {
+      await expect(
+        gov.connect(alice).castVote(proposalId, 3)
+      ).to.revertedWith('MilkyGovernor::castVoteInternal: invalid vote type')
+    })
 
+    it('casts for, againt, and abstain votes', async () => {
+      await gov.connect(alice).castVote(proposalId, Support.FOR)
+      await gov.connect(bob).castVote(proposalId, Support.AGAINST)
+      await gov.connect(carol).castVote(proposalId, Support.ABSTAIN)
+
+      const aReceipt = await gov.getReceipt(proposalId, alice.address)
+      expect(aReceipt.hasVoted).eq(true)
+      expect(aReceipt.support).eq(Support.FOR)
+      expect(aReceipt.votes).gt(ROUGH_CREAMY_BALANCE)
+
+      const bReceipt = await gov.getReceipt(proposalId, bob.address)
+      expect(bReceipt.hasVoted).eq(true)
+      expect(bReceipt.support).eq(Support.AGAINST)
+      expect(bReceipt.votes).gt(ROUGH_CREAMY_BALANCE)
+
+      const cReceipt = await gov.getReceipt(proposalId, carol.address)
+      expect(cReceipt.hasVoted).eq(true)
+      expect(cReceipt.support).eq(Support.ABSTAIN)
+      expect(cReceipt.votes).gt(ROUGH_CREAMY_BALANCE)
+
+      const proposal = await gov.proposals(proposalId)
+      expect(proposal.forVotes).gt(ROUGH_CREAMY_BALANCE)
+      expect(proposal.againstVotes).gt(ROUGH_CREAMY_BALANCE)
+      expect(proposal.abstainVotes).gt(ROUGH_CREAMY_BALANCE)
+    })
+
+    it('does not allow account to change vote', async () => {
+      await gov.connect(alice).castVote(proposalId, Support.FOR)
+      await expect(
+        gov.connect(alice).castVote(proposalId, Support.AGAINST)
+      ).to.revertedWith('MilkyGovernor::castVoteInternal: voter already voted')
+    })
+  })
+
+  describe('state', () => {
+    it('defeats if more are against', async () => {
+      // await mineToBlock(proposal.endBlock)
+
+      // expect(await gov.state(proposalId)).eq(ProposalState.DEFEATED)
+    })
+
+    it('defeats if quorum is not reached', async () => {
+      // await mineToBlock(proposal.endBlock)
+
+      // expect(await gov.state(proposalId)).eq(ProposalState.DEFEATED)
+    })
+
+    it('succeeds', async () => {
+      // await gov.connect(alice).castVote(proposalId, Support.FOR)
+
+      // const proposal = await gov.proposals(proposalId)
+      // await mineToBlock(proposal.endBlock)
+      
+      // expect(await gov.state(proposalId)).eq(ProposalState.SUCCEEDED)
     })
   })
 
