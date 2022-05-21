@@ -1,0 +1,6 @@
+{
+    "creamy": "0x1ECA2C766072534DFEE8793E54DC5b45d93a3e67",
+    "votingPeriod": "64800",
+    "votingDelay": "1",
+    "proposalThreshold": "1000000000000000000000000"
+}
